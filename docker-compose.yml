@@ -1,0 +1,25 @@
+version: '3'
+services:
+  server1:
+    build:
+      context: ./first-server
+    container_name: first-server
+    restart: always
+    ports:
+      - 7701:7701
+    networks:
+      - multitasking-app
+
+  server2:
+    build:
+      context: ./second-server
+    container_name: second-server
+    restart: always
+    ports:
+      - 7702:7702
+    networks:
+      - multitasking-app
+
+networks:
+  multitasking-app:
+    driver: bridge
