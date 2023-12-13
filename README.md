@@ -26,18 +26,11 @@ make run-servers
 make run-client
 ```
 
-## Usage
-
-The app communicates with two servers: first-server and second-server. The following commands can be entered:
-
-    1 - Display the architecture of the processor (first-server)
-    2 - Display the number of logical processors (first-server)
-    3 - Display the number of processes in the system (second-server)
-    4 - Display the number of modules of the server process (second-server)
-
 ## User Interface
 
-Console :)
+Console:)
+
+![User Interface](screenshots/image.png)
 
 ## Technologies Used
 

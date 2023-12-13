@@ -8,6 +8,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <arpa/inet.h>
+#include <json-c/json.h>
 
 void get_cpu_architecture(char *arch){
     unsigned int level = 0;
@@ -20,6 +21,19 @@ void get_cpu_architecture(char *arch){
 
 int get_logical_processors_count(){
     return sysconf(_SC_NPROCESSORS_ONLN);
+}
+
+
+char* create_json(char* cpu_arch, int logical_processor_count) {
+    json_object *jobj = json_object_new_object();
+    
+    json_object *jstring = json_object_new_string(cpu_arch);
+    json_object *jint = json_object_new_int(logical_processor_count);
+
+    json_object_object_add(jobj, "CpuArchitecture", jstring);
+    json_object_object_add(jobj, "LogicalProcessorCount", jint);
+
+    return (char*) json_object_to_json_string(jobj);
 }
 
 pthread_mutex_t counter_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -41,32 +55,38 @@ void* handle_client(void* arg) {
     char buffer[1024] = {0};
     int valread;
 
+    char old_cpu_arch[13] = {0};
+    int old_logical_processor_count = -1;
+    char current_cpu_arch[13];
+    int current_logical_processor_count;
+
     pthread_mutex_lock(&client_sockets_mutex);
     client_sockets = realloc(client_sockets, sizeof(int) * (client_sockets_count + 1));
     client_sockets[client_sockets_count++] = socket;
     pthread_mutex_unlock(&client_sockets_mutex);
 
-    while((valread = read(socket, buffer, sizeof(buffer))) > 0) {
-        printf("Received command: %s\n", buffer);
-        
-        if (strcmp(buffer, "get_cpu_architecture") == 0) {
-            char arch[13] = {0};
-            get_cpu_architecture(arch);
-            send(socket, arch, strlen(arch), 0);
-        } else if (strcmp(buffer, "get_logical_processors_count") == 0) {
-            int count = get_logical_processors_count();
-            char response[50];
-            sprintf(response, "%d", count);
-            send(socket, response, strlen(response), 0);
-        } else {
-            char* response = "Invalid command";
-            send(socket, response, strlen(response), 0);
+    while(1) {
+        get_cpu_architecture(current_cpu_arch);
+        current_logical_processor_count = get_logical_processors_count();
+
+        if (strcmp(current_cpu_arch, old_cpu_arch) != 0 || current_logical_processor_count != old_logical_processor_count) {
+            strncpy(old_cpu_arch, current_cpu_arch, sizeof(old_cpu_arch));
+            old_logical_processor_count = current_logical_processor_count;
+            
+            char* response = create_json(current_cpu_arch, current_logical_processor_count);
+            usleep(100000);
+            ssize_t sendResult = send(socket, response, strlen(response), 0);
+            if (sendResult == -1) {
+                printf("Client disconnected, closing socket.\n");
+                break;
+            }
         }
 
-        memset(buffer, 0, sizeof(buffer));
+        sleep(1);  // Sleep for one second
     }
 
     pthread_mutex_lock(&client_sockets_mutex);
+
     for (int i = 0; i < client_sockets_count; i++) {
         if (client_sockets[i] == socket) {
             client_sockets[i] = client_sockets[client_sockets_count - 1];
@@ -75,6 +95,7 @@ void* handle_client(void* arg) {
             break;
         }
     }
+    
     pthread_mutex_unlock(&client_sockets_mutex);
 
     printf("Connection(%d) closed\n", handler_num);
