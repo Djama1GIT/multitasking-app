@@ -10,7 +10,7 @@ build-multitasking-client:
 	docker build -t multitasking-client .
 
 run-multitasking-client:
-	docker run -it --network=multitasking-app_multitasking-app multitasking-client
+	docker run -it -e term=xterm-256color --network=multitasking-app_multitasking-app multitasking-client
 
 build: build-docker-compose build-multitasking-client
 

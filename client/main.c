@@ -1,3 +1,4 @@
+#include <curses.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,6 +7,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <ncurses.h>
+#include <locale.h>
 
 void send_command(int sock, const char* command) {
    char buffer[1024] = {0};
@@ -17,17 +20,62 @@ void send_command(int sock, const char* command) {
    // Читаем ответ от сервера
    valread = read(sock, buffer, 1024);
    if (strcmp(buffer, "") == 0) {
-        printf("\n\nПотеряно соединение с сервером\n");
+        printw("\n\nПотеряно соединение с сервером\n");
         exit(-1);
    }
-   printf("%s", buffer);
+   printw("%s", buffer);
 
    memset(buffer, 0, sizeof(buffer));
+}
+
+void show_commands() {
+    attron(COLOR_PAIR(1));
+    printw("Commands:\n");
+    attroff(COLOR_PAIR(1));
+    
+    attron(COLOR_PAIR(2));
+    printw("Server 1:\n");
+    attroff(COLOR_PAIR(2));
+    
+    attron(COLOR_PAIR(4));
+    printw("1 - Print CPU architecture\n");
+    printw("2 - Print the number of logical processors\n");
+    attroff(COLOR_PAIR(4));
+    
+    attron(COLOR_PAIR(2));
+    printw("Server 2:\n");
+    attroff(COLOR_PAIR(2));
+    
+    attron(COLOR_PAIR(4));
+    printw("3 - Print the number of system processes\n");
+    printw("4 - Print the number of server process modules\n");
+    attroff(COLOR_PAIR(4));
+    
+    attron(COLOR_PAIR(1));
+    printw("Press on a command number (0 to exit)\n");
+    attroff(COLOR_PAIR(1));
+
+    nodelay(stdscr, TRUE);
 }
 
 struct hostent *he;
 
 int main() {
+   setlocale(LC_ALL, "en_US.UTF-8");
+
+   initscr();
+   cbreak();
+   noecho();
+
+   // Инициализируем систему цветов
+   start_color();   
+
+   // Определяем цветовые пары
+   init_pair(1, COLOR_WHITE, COLOR_BLACK);  // Белый текст на черном фоне
+   init_pair(2, COLOR_GREEN, COLOR_BLACK);  // Зеленый текст на черном фоне
+   init_pair(3, COLOR_BLUE, COLOR_BLACK);  // Синий текст на черном фоне
+   init_pair(4, COLOR_RED, COLOR_BLACK);    // Красный текст на черном фоне
+
    setbuf(stdout, NULL);
    char* server1_ip = "first-server";
    int server1_port = 7701;
@@ -70,53 +118,78 @@ int main() {
    char command[1024];
    int command_number;
 
-   while(1) {
-       printf("\nКоманды:\n");
-       printf("Сервер 1:\n");
-       printf("1 - Вывести архитектуру процессора\n");
-       printf("2 - Вывести количество логических процессоров\n");
-       printf("Сервер 2:\n");
-       printf("3 - Вывести количество процессов в системе\n");
-       printf("4 - Вывести количество модулей серверного процесса\n");
-       printf("Введите номер команды (0 для выхода): ");
-       scanf("%d", &command_number);
-       getchar(); // Читаем символ новой строки, который остался после вызова scanf
+   show_commands();
+   while(1) {    
+        int ch;
+        while(1) {
+            ch = getch();
+            if (ch >= '0' && ch <= '4') {
+                command_number = ch - '0';
+                break;
+            }
+        }
 
-       if (command_number == 0) {
-           break;
-       } else if (command_number < 1 || command_number > 4) {
-           printf("Неверный номер команды\n");
-           continue;
-       }
-
-       switch (command_number) {
-           case 1:
-               strcpy(command, "get_cpu_architecture");
-               printf("Сервер 1: Архитектура CPU: ");
-               send_command(sock1, command);
-               break;
-           case 2:
-               strcpy(command, "get_logical_processors_count");
-               printf("Сервер 1: Количество логических процессоров: ");
-               send_command(sock1, command);
-               break;
-           case 3:
-               strcpy(command, "get_process_count");
-               printf("Сервер 2: Количество процессов в системе: ");
-               send_command(sock2, command);
-               break;
-           case 4:
-               strcpy(command, "get_module_count");
-               printf("Сервер 2: Количество модулей серверного процесса: ");
-               send_command(sock2, command);
-               break;
-       }
-       printf("\n");
-   }
+        nodelay(stdscr, FALSE);
+    
+        if (command_number == 0) {
+            break;
+        } else if (command_number < 1 || command_number > 4) {
+            clear();
+            attron(COLOR_PAIR(1));
+            printw("Invalid command number\n");
+            attroff(COLOR_PAIR(1));
+            continue;
+        }
+    
+        switch (command_number) {
+            case 1:
+                clear();
+                show_commands();
+                strcpy(command, "get_cpu_architecture");
+                attron(COLOR_PAIR(2));
+                printw("Server 1: CPU Architecture: ");
+                attroff(COLOR_PAIR(2));
+                send_command(sock1, command);
+                printw("\n");
+                break;
+            case 2:
+                clear();
+                show_commands();
+                strcpy(command, "get_logical_processors_count");
+                attron(COLOR_PAIR(2));
+                printw("Server 1: Number of Logical Processors: ");
+                attroff(COLOR_PAIR(2));
+                send_command(sock1, command);
+                printw("\n");
+                break;
+            case 3:
+                clear();
+                show_commands();
+                strcpy(command, "get_process_count");
+                attron(COLOR_PAIR(3));
+                printw("Server 2: Number of System Processes: ");
+                attroff(COLOR_PAIR(3));
+                send_command(sock2, command);
+                printw("\n");
+                break;
+            case 4:
+                clear();
+                show_commands();
+                strcpy(command, "get_module_count");
+                attron(COLOR_PAIR(3));
+                printw("Server 2: Number of Server Process Modules: ");
+                attroff(COLOR_PAIR(3));
+                send_command(sock2, command);
+                printw("\n");
+                break;
+        }
+    }
 
    // Закрываем сокеты
    close(sock1);
    close(sock2);
+
+   endwin();
 
    return 0;
 }

@@ -4,7 +4,7 @@ This is a multitasking app that communicates with two servers to perform various
 
 ## Installation and Setup <sup><sub>(tested on Linux)</sub></sup>
 
-1. Install Docker and Docker Compose if they are not already installed on your system.
+1. Install Make, Docker and Docker Compose if they are not already installed on your system.
 
 2. Clone the project repository:
 
