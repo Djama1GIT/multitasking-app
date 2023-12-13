@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -10,11 +11,37 @@
 #include <signal.h>
 #include <arpa/inet.h>
 #include <json-c/json.h>
+#include <stdarg.h>
 
-void logger(const char* tag, const char* message) {
-   time_t now;
-   time(&now);
-   printf("%s [%s]: %s\n", ctime(&now), tag, message);
+#define LOG(level, format, ...) logger(level, __FILE__, __func__, __LINE__, format, ##__VA_ARGS__)
+
+typedef enum {
+        TRACE,   // Detailed information, typically of interest only when diagnosing problems.
+        DEBUG,   // More detailed information.
+        INFO,    // Confirmation that things are working as expected.
+        WARNING, // An indication that something unexpected happened, or there may be a problem in the near future (e.g. ‘disk space low’). The software is still working as expected.
+        ERROR,   // Due to a more serious problem, the software has not been able to perform some function.
+        FATAL    // A very severe error event that will likely lead the application to abort.
+    } LogLevel;
+
+
+void logger(LogLevel level, const char* tag, const char* format, ...) {
+    const char* levelStrings[] = {"TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"};
+
+    if (level < TRACE || level > FATAL) {
+        return; // Invalid log level.
+    }
+
+    time_t now;
+    time(&now);
+    printf("%s [%s] [%s]: ", ctime(&now), levelStrings[level], tag);
+
+    va_list args;
+    va_start(args, format);
+    vprintf(format, args);
+    va_end(args);
+
+    printf("\n");
 }
 
 int get_process_count() {
@@ -58,7 +85,6 @@ char* create_json(int process_count, int module_count) {
     if (module_count >= 0) json_object_object_add(jobj, "ModuleCount", jint2);
     const char* temp = json_object_to_json_string(jobj);
     char* result = strdup(temp); 
-    logger("create_json", result);
     return result;
 }
 
@@ -72,7 +98,7 @@ int subscriptions_count = 0;
 pthread_mutex_t subscriptions_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 void subscribe(int client_id, char* subscription_type) {
-    logger("subscribe", subscription_type);
+    logger(INFO, "subscribe", "Client ID: %d, Subscription type: %s", client_id, subscription_type);
     pthread_mutex_lock(&subscriptions_mutex);
     for (int i = 0; i < subscriptions_count; i++) {
         if (subscriptions[i].client_id == client_id && strcmp(subscriptions[i].subscription_type, subscription_type) == 0) {
@@ -89,7 +115,7 @@ void subscribe(int client_id, char* subscription_type) {
 }
 
 void unsubscribe(int client_id, char* subscription_type) {
-    logger("unsubscribe", subscription_type);
+    logger(INFO, "unsubscribe", "Client ID: %d, Subscription type: %s", client_id, subscription_type);
     pthread_mutex_lock(&subscriptions_mutex);
     for (int i = 0; i < subscriptions_count; i++) {
         if (subscriptions[i].client_id == client_id && strcmp(subscriptions[i].subscription_type, subscription_type) == 0) {
@@ -105,11 +131,12 @@ void unsubscribe(int client_id, char* subscription_type) {
 }
 
 void send_updates(char* subscription_type, char* update) {
-    logger("send_updated", update);
+    logger(INFO, "send updates", "Subscription type: %s, Update: %s", subscription_type, update);
     pthread_mutex_lock(&subscriptions_mutex);
     for (int i = 0; i < subscriptions_count; i++) {
         if (strcmp(subscriptions[i].subscription_type, subscription_type) == 0) {
             int client_id = subscriptions[i].client_id;
+            logger(INFO, "send updates", "Client ID: %d, Subscription type: %s, Update: %s", client_id, subscription_type, update);
             send(client_id, update, strlen(update), 0);
         }
     }
@@ -157,7 +184,7 @@ void* handle_client(void* arg) {
     int handle_num = counter;
     pthread_mutex_unlock(&counter_mutex);
 
-    printf("New connection(%d) is opened\n", counter);
+    logger(INFO, "new connection", "Client ID: %d", handle_num);
     int socket = *((int*)arg);
     char buffer[1024] = {0};
     int valread;
@@ -176,7 +203,7 @@ void* handle_client(void* arg) {
         if (valread == 0) {
             break;
         }
-        logger("command", buffer);
+        logger(INFO, "Command executed", "Client ID: %d, Comamnd: %s", socket, buffer);
         if (strcmp(buffer, "subscribe_process_count") == 0) {
             char* initial_data = create_json(process_count, -1);
             send(socket, initial_data, strlen(initial_data), 0);
@@ -216,7 +243,7 @@ void* handle_client(void* arg) {
     }
     pthread_mutex_unlock(&client_sockets_mutex);
 
-    printf("Connection(%d) closed\n", handle_num);
+    logger(INFO, "connection closed", "Client ID: %d", handle_num);
     shutdown(socket, 2);
     close(socket);
     free(arg);
@@ -240,7 +267,7 @@ int main() {
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = 0;
     if (sigaction(SIGINT, &sa, NULL) == -1) {
-        perror("sigaction");
+        LOG(ERROR, "An error occurred in sigaction: %s", strerror(errno));
         exit(1);
     }
     int server_fd;
@@ -248,24 +275,24 @@ int main() {
     int opt = 1;
     int addrlen = sizeof(address);
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
-        perror("socket failed");
+        LOG(ERROR, "An error occurred while socket creating: %s", strerror(errno));
         exit(EXIT_FAILURE);
     }
     address.sin_family = AF_INET;
     inet_pton(AF_INET, "0.0.0.0", &(address.sin_addr));
     address.sin_port = htons(7702);
     if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
-        perror("bind failed");
+        LOG(ERROR, "An error occurred while binding: %s", strerror(errno));
         exit(EXIT_FAILURE);
     }
     if (listen(server_fd, 3) < 0) {
-        perror("listen");
+        LOG(ERROR, "An error occurred while listening: %s", strerror(errno));
         exit(EXIT_FAILURE);
     }
 
     pthread_t update_thread_id;
     if(pthread_create(&update_thread_id, NULL, update_thread, NULL) != 0) {
-        perror("could not create thread");
+        LOG(ERROR, "An error occurred while creating thread: %s", strerror(errno));
         return 1;
     }
 
@@ -273,13 +300,13 @@ int main() {
     while(1) {
         int* new_socket_ptr = malloc(sizeof(int));
         if ((*new_socket_ptr = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {
-            perror("accept");
+            LOG(ERROR, "Accept: %s", strerror(errno));
             free(new_socket_ptr);
             continue;
         }
         pthread_t thread_id;
         if(pthread_create(&thread_id, NULL, handle_client, new_socket_ptr) != 0) {
-            perror("could not create thread");
+            LOG(ERROR, "An error occurred while creating thread: %s", strerror(errno));
             return 1;
         }
     }
