@@ -7,7 +7,7 @@ run-docker-compose:
 	docker-compose up
 
 build-multitasking-client:
-	docker build -t multitasking-client .
+	cd client && docker build -t multitasking-client .
 
 run-multitasking-client:
 	docker run -it -e term=xterm-256color --network=multitasking-app_multitasking-app multitasking-client

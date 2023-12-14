@@ -97,7 +97,9 @@ void update_display(struct connection_info* info,
     } else {
         wattron(info->win, COLOR_PAIR(2)); 
         wprintw(info->win, "Server %d disconnected\n", info->server_num);
-        wattroff(info->win, COLOR_PAIR(2)); 
+        wattroff(info->win, COLOR_PAIR(2));
+        wrefresh(info->win);
+        return;
     }
     
 
@@ -222,20 +224,6 @@ void* receive_data(void* arg) {
    if (last_module_count != NULL) free(last_module_count);
 
    return NULL;
-}
-
-void* check_connection(void* arg) {
-    struct connection_info* info = (struct connection_info*)arg;
-    char buffer[1]; 
-    while(1) {
-        int result = recv(info->sock, buffer, sizeof(buffer), MSG_PEEK);
-        if (result == 0) {
-            info->connected = 0;
-            break;
-        }
-        sleep(1);
-    }
-    return NULL;
 }
 
 struct hostent *he;
@@ -413,29 +401,29 @@ int main() {
                 }
                 usleep(60000);
             } else if (command_number <= 4) {
-                const char* command;
-                if (command_number == 3) {
-                    command = subscribe_cpu_architecture ? "unsubscribe_cpu_architecture" : "subscribe_cpu_architecture";
-                    subscribe_cpu_architecture = !subscribe_cpu_architecture; 
-                } else if (command_number == 4) {
-                    command = subscribe_processors_count ? "unsubscribe_logical_processors_count" : "subscribe_logical_processors_count";
-                    subscribe_processors_count = !subscribe_processors_count; 
-                }
-                update_display(&connection1, last_cpu_architecture, last_logical_processors_count, last_process_count, last_module_count);
                 if (connection1.connected) {
+                    const char* command;
+                    if (command_number == 3) {
+                        command = subscribe_cpu_architecture ? "unsubscribe_cpu_architecture" : "subscribe_cpu_architecture";
+                        subscribe_cpu_architecture = !subscribe_cpu_architecture; 
+                    } else if (command_number == 4) {
+                        command = subscribe_processors_count ? "unsubscribe_logical_processors_count" : "subscribe_logical_processors_count";
+                        subscribe_processors_count = !subscribe_processors_count; 
+                    }
+                    update_display(&connection1, last_cpu_architecture, last_logical_processors_count, last_process_count, last_module_count);
                     send(connection1.sock, command, strlen(command), 0);
                 }
             } else if (command_number <= 6) {
-                const char* command;
-                if (command_number == 5) {
-                    command = subscribe_process ? "unsubscribe_process_count" : "subscribe_process_count";
-                    subscribe_process = !subscribe_process; 
-                } else if (command_number == 6) {
-                    command = subscribe_module ? "unsubscribe_module_count" : "subscribe_module_count";
-                    subscribe_module = !subscribe_module; 
-                }
-                update_display(&connection2, last_cpu_architecture, last_logical_processors_count, last_process_count, last_module_count);
                 if (connection2.connected) {
+                    const char* command;
+                    if (command_number == 5) {
+                        command = subscribe_process ? "unsubscribe_process_count" : "subscribe_process_count";
+                        subscribe_process = !subscribe_process; 
+                    } else if (command_number == 6) {
+                        command = subscribe_module ? "unsubscribe_module_count" : "subscribe_module_count";
+                        subscribe_module = !subscribe_module; 
+                    }
+                    update_display(&connection2, last_cpu_architecture, last_logical_processors_count, last_process_count, last_module_count);
                     send(connection2.sock, command, strlen(command), 0);
                 }
             }
