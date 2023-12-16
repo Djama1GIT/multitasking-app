@@ -35,5 +35,5 @@ Console:)
 ## Technologies Used
 
 - C - The programming language used for the project.
-- Socket - Socket is a computer communications protocol, providing simultaneous two-way communication channels over a single Transmission Control Protocol connection.
+- Socket - A computer communications protocol, providing simultaneous two-way communication channels over a single Transmission Control Protocol connection.
 - Docker - A platform used in the project for creating, deploying, and managing containers, allowing the application to run in an isolated environment.
